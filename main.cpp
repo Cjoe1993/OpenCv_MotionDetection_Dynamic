@@ -6,13 +6,31 @@
 #include <opencv4/opencv2/imgproc.hpp>
 #include <unistd.h>
 
+#if defined(_WIN32)
+#define PLATFORM_NAME "windows" // Windows
+#elif defined(_WIN64)
+#define PLATFORM_NAME "windows" // Windows
+#elif defined(__CYGWIN__) && !defined(_WIN32)
+#define PLATFORM_NAME "windows" // Windows (Cygwin POSIX under Microsoft Window)
+#elif defined(__ANDROID__)
+#define PLATFORM_NAME "android" // Android (implies Linux, so it must come first)
+#elif defined(__linux__)
+#define PLATFORM_NAME "linux" // Debian, Ubuntu, Gentoo, Fedora, openSUSE, RedHat, Centos and other
+#elif defined(__unix__) || !defined(__APPLE__) && defined(__MACH__)
+#endif
+
 using namespace cv;
 using namespace std;
 
 void zoom(Mat& frame, Mat& frame2, const string& name);
+void capImage(Mat& imgCap, int& num);
+
 int main(int argc, char** argv) {
-    // frames
-    Mat frame, temp, gray, frameDelta, thresh, firstFrame;
+    // add in platform specific pathing for saved images later ---
+    cout << "Platform identified as " << PLATFORM_NAME << endl;
+//    String DIR;
+    Mat frame, temp, gray, frameDelta, thresh, firstFrame, imgCap;
+    int num = 0;
     vector<vector<Point> > cnts;
 
     //Start VideoCapture
@@ -41,8 +59,14 @@ int main(int argc, char** argv) {
     }
     cout << "Press q to terminate\n" << endl;
 
-    // count, representing frames (slower than actual fps due to computation time, every 15 frames equals roughly 1 second here,
-    // even though the default fps is 30)
+    /**
+     * @var count
+     * every 15 frames, or about once a second with the computational speed on this computer,
+     * the firstFrame will reset to the current frame which compensates for lighting and background changes by using the count variable.
+     * Count represents frames (slower than actual fps due to computation time, every 15 frames equals roughly 1 second on this machine)
+     * and allows us to reset the base comparison frame after the maximum count threshold is reached
+     * */
+
     int count = 0;
 
     while (cap.read(frame)) {
@@ -61,20 +85,39 @@ int main(int argc, char** argv) {
         dilate(thresh, thresh, Mat(), Point(-1,-1), 2);
         findContours(thresh, cnts, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
-        for(auto & cnt : cnts) {
-            if(contourArea(cnt) < 500) {
+        int area = 0;
+        int index;
+        Rect rect;
+        for (auto & cnt : cnts) {
+            if (contourArea(cnt) < 500) {
                 continue;
             }
-            putText(frame, "Motion Detected", Point(10, 20), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(0,0,255),2);
         }
+        for (int i = 0; i < cnts.size(); i++){
+            if (area < cnts[i].size()){
+                index = i;
+            }
+            rect = boundingRect(cnts[index]);
+        }
+        Point ptx, pty;
+        ptx.x = rect.x;
+        ptx.y = rect.y;
+        pty.x = rect.x + rect.width;
+        pty.y = rect.y + rect.height;
+
+        // do not draw rect if area is too small
+        if (rect.width < 50 || rect.height < 50){
+            ;;
+        } else {
+            rectangle(frame, ptx, pty, Scalar(0,255,0), 1);
+        }
+
         //if frame does not initialize, break
         if (frame.empty()) {
             cerr << "ERROR! blank frame grabbed\n";
             break;
         }
-        // every 15 frames, or about once a second with the computational speed on this computer,
-        // the firstFrame will reset to the current frame which compensates for lighting and background changes.
-        // aka rudimentary dynamic background sensor.
+
         if (count >= 15){
             // reset firstFrame to current frame, and convert to gray
             // reset counter to zero
@@ -142,6 +185,9 @@ int main(int argc, char** argv) {
             // destroy zoom windows
         } else if (key == 'w'){
             destroyWindow(name2);
+        } else if (key == 'c'){
+            // image capture
+            capImage(frame, num);
         }
 
     }
@@ -156,4 +202,10 @@ void zoom(Mat& frame, Mat& frame2, const string& name){
     frame2 = frame(roi);
     resize(frame2, frame2, frame.size());
     imshow(name, frame2);
+}
+// screenshot function
+void capImage(Mat& imgCap, int& num){
+    // need to set up proper directory for images, as of now each run inits num to 0.
+    imwrite("/home/jc/image_capture_" + to_string(num) + ".jpg", imgCap);
+    num++;
 }
