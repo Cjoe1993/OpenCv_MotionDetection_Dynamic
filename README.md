@@ -4,3 +4,4 @@ Implementing motion detection using OpenCV with C++ using a static background im
 The first frame image is taken, however this means that motion is often detected by trivial pixel changes, such as small changes in lighting or reflections. To combat this,
 the first frame, aka the frame to be compared to, is reset with the current frame about once a second (increased by changing the counter check).
 
+When motion is detected, screen captures are taken, then those captures are processed later with facial recognition.
