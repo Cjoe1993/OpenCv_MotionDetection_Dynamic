@@ -5,6 +5,7 @@
 #include <opencv4/opencv2/highgui.hpp>
 #include <opencv4/opencv2/imgproc.hpp>
 #include <unistd.h>
+#include "Detection.h"
 
 #if defined(_WIN32)
 #define PLATFORM_NAME "windows" // Windows
@@ -23,25 +24,33 @@ using namespace cv;
 using namespace std;
 
 void zoom(Mat& frame, Mat& frame2, const string& name);
-void capImage(Mat& imgCap, int& num);
-
+void capImage(Mat& imgCap, int& num, const string& location, vector<Mat>& ss);
+void capImage2(Mat& imgCap, int num, const string& location);
 int main(int argc, char** argv) {
     // add in platform specific pathing for saved images later ---
     cout << "Platform identified as " << PLATFORM_NAME << endl;
-//    String DIR;
     Mat frame, temp, gray, frameDelta, thresh, firstFrame, imgCap;
+    // where your captures will be stored
+    string captures = "/home/jc/CLionProjects/OpenCVTesting/captures";
+    // where your detected faces will be stored
+    string detected_faces = "/home/jc/CLionProjects/OpenCVTesting/captures/detected_faces";
+    // pushing screenshots into this vector for now
+    vector<Mat> screenShots;
+    double scale = 1.2;
+
     int num = 0;
     vector<vector<Point> > cnts;
 
+    CascadeClassifier cascadeClassifier;
+    cascadeClassifier.load("/usr/share/opencv4/haarcascades/haarcascade_frontalcatface.xml");
+
     //Start VideoCapture
     VideoCapture cap;
-    // Open default camera
-    cap.open(0);
     int deviceID = 0;
     int apiID = CAP_ANY;
     // Open camera with deviceID
     cap.open(deviceID + apiID);
-    sleep(3);
+    sleep(1);
     cap.read(frame);
 
     //convert to grayscale and set the first frame
@@ -70,8 +79,13 @@ int main(int argc, char** argv) {
     int count = 0;
 
     while (cap.read(frame)) {
-
-        // increment counter
+        // works
+//        Mat newFrame = frame.clone();
+//
+//        if (Detection::detect(newFrame, cascadeClassifier, scale)){
+//            cout << "Face detected!" << endl;
+//        }
+// increment counter
         count++;
         //convert to grayscale
         cvtColor(frame, gray, COLOR_BGR2GRAY);
@@ -88,17 +102,14 @@ int main(int argc, char** argv) {
         int area = 0;
         int index;
         Rect rect;
-        for (auto & cnt : cnts) {
-            if (contourArea(cnt) < 500) {
-                continue;
-            }
-        }
+
         for (int i = 0; i < cnts.size(); i++){
             if (area < cnts[i].size()){
                 index = i;
             }
             rect = boundingRect(cnts[index]);
         }
+
         Point ptx, pty;
         ptx.x = rect.x;
         ptx.y = rect.y;
@@ -110,6 +121,10 @@ int main(int argc, char** argv) {
             ;;
         } else {
             rectangle(frame, ptx, pty, Scalar(0,255,0), 1);
+            // take a picture every 3 frames
+            if (count % 3 == 0) {
+                capImage(frame, num, captures, screenShots);
+            }
         }
 
         //if frame does not initialize, break
@@ -126,52 +141,31 @@ int main(int argc, char** argv) {
             GaussianBlur(firstFrame, firstFrame, Size(21, 21), 0);
             count = 0;
         }
-//        uncomment to display fps
-//        double fps = cap.get(CAP_PROP_FPS);
-//        String str = to_string(fps);
-//        Point point(30, 30);
-//        putText(frame, str, point,
-//                FONT_HERSHEY_COMPLEX_SMALL, 0.8, Scalar(200, 200, 250), 1, 8, false);
-
-
-//draw a box/crosshair at center of screen
+        // draw a box/crosshair at center of screen
 
         // top left corner
-        Point pt1(150, 100);
-        Point pt2(190, 100);
-        Point pt3(150, 140);
+        Point pt1(150, 100);Point pt2(190, 100);Point pt3(150, 140);
         line(frame, pt1, pt2, Scalar(125, 125, 125), 1, 8, 0);
         line(frame, pt1, pt3, Scalar(125, 125, 125), 1, 8, 0);
         // top right corner
-        Point pt4(490, 100);
-        Point pt5(450, 100);
-        Point pt6(490, 140);
+        Point pt4(490, 100);Point pt5(450, 100);Point pt6(490, 140);
         line(frame, pt4, pt5, Scalar(125, 125, 125), 1, 8, 0);
         line(frame, pt4, pt6, Scalar(125, 125, 125), 1, 8, 0);
         // bottom left corner
-        Point pt7(150, 400);
-        Point pt8(190, 400);
-        Point pt9(150, 360);
+        Point pt7(150, 400);Point pt8(190, 400);Point pt9(150, 360);
         line(frame, pt7, pt8, Scalar(125, 125, 125), 1, 8, 0);
         line(frame, pt7, pt9, Scalar(125, 125, 125), 1, 8, 0);
         // bottom right corner
-        Point pt10(490, 400);
-        Point pt11(450, 400);
-        Point pt12(490, 360);
+        Point pt10(490, 400);Point pt11(450, 400);Point pt12(490, 360);
         line(frame, pt10, pt11, Scalar(125, 125, 125), 1, 8, 0);
         line(frame, pt10, pt12, Scalar(125, 125, 125), 1, 8, 0);
         // crosshair
-        Point x1(300, 250);
-        Point x2(340, 250);
-        Point x3(320, 270);
-        Point x4(320, 230);
+        Point x1(300, 250);Point x2(340, 250);Point x3(320, 270);Point x4(320, 230);
         line(frame, x1, x2, Scalar(125, 125, 125), 1, 8, 0);
         line(frame, x3, x4, Scalar(125, 125, 125), 1, 8, 0);
 
-        // show the feed, timeout if key pressed
+        // show the feed, timeout if q key pressed
         imshow(name1, frame);
-// Uncomment to show the frame that will be the base comparison frame in addition to the live feed
-//        imshow("ff", firstFrame);
 
         int key = (waitKey(1) & 0xFF);
         if (key == 'q') {
@@ -187,10 +181,25 @@ int main(int argc, char** argv) {
             destroyWindow(name2);
         } else if (key == 'c'){
             // image capture
-            capImage(frame, num);
+//            capImage(frame, num, captures);
         }
 
     }
+    // integer below needs to be dynamic
+    cout << "size: " << 38 << endl;
+    int sz = 0;
+    Mat image;
+    for (int i = 0; i < 38; i++) {
+        image = imread(captures + "/image_capture_" + to_string(i) + ".jpg");
+
+        if (Detection::detect(image, cascadeClassifier, scale)) {
+//        if (Detection::detect(newFrame, cascadeClassifier, scale)){
+            sz++;
+            cout << i << endl;
+            capImage2(image, i, detected_faces);
+        }
+    }
+    cout << "Found " << sz << " faces." << endl;
     cap.release();
     destroyAllWindows();
     return 0;
@@ -204,8 +213,19 @@ void zoom(Mat& frame, Mat& frame2, const string& name){
     imshow(name, frame2);
 }
 // screenshot function
-void capImage(Mat& imgCap, int& num){
+void capImage(Mat& imgCap, int& num, const string& location, vector<Mat>& ss){
+    Mat img;
+    img = imgCap;
+    // pushing captures to vector
+    ss.push_back(img);
+    imwrite(location + "/image_capture_" + to_string(num) + ".jpg", img);
     // need to set up proper directory for images, as of now each run inits num to 0.
-    imwrite("/home/jc/image_capture_" + to_string(num) + ".jpg", imgCap);
     num++;
 }
+void capImage2(Mat& imgCap, int num, const string& location){
+    Mat img;
+    img = imgCap;
+    // pushing captures to vector
+    imwrite(location + "/image_capture_" + to_string(num) + ".jpg", img);
+}
+
