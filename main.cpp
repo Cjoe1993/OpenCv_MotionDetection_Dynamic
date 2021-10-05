@@ -5,6 +5,7 @@
 #include <opencv4/opencv2/highgui.hpp>
 #include <opencv4/opencv2/imgproc.hpp>
 #include <unistd.h>
+#include <filesystem>
 #include "Detection.h"
 
 #if defined(_WIN32)
@@ -24,9 +25,15 @@ using namespace cv;
 using namespace std;
 
 void zoom(Mat& frame, Mat& frame2, const string& name);
-void capImage(Mat& imgCap, int& num, const string& location, vector<Mat>& ss);
-void capImage2(Mat& imgCap, int num, const string& location);
+void capMotion(Mat& imgCap, int& num, const string& location);
+void capFace(Mat& imgCap, int num, const string& location, int& totSize, int& totSizeX, int& totSizeY);
+
 int main(int argc, char** argv) {
+
+    // number of files to check for face
+    int numFiles = 0;
+    filesystem::path pathCaptures { "/home/jc/CLionProjects/OpenCVTesting/captures" };
+
     // add in platform specific pathing for saved images later ---
     cout << "Platform identified as " << PLATFORM_NAME << endl;
     Mat frame, temp, gray, frameDelta, thresh, firstFrame, imgCap;
@@ -34,9 +41,10 @@ int main(int argc, char** argv) {
     string captures = "/home/jc/CLionProjects/OpenCVTesting/captures";
     // where your detected faces will be stored
     string detected_faces = "/home/jc/CLionProjects/OpenCVTesting/captures/detected_faces";
-    // pushing screenshots into this vector for now
-    vector<Mat> screenShots;
-    double scale = 1.2;
+//    double scale = 1.2;
+
+    // crop positioning for face shots
+    int totSize, totSizeX, totSizeY;
 
     int num = 0;
     vector<vector<Point> > cnts;
@@ -79,13 +87,7 @@ int main(int argc, char** argv) {
     int count = 0;
 
     while (cap.read(frame)) {
-        // works
-//        Mat newFrame = frame.clone();
-//
-//        if (Detection::detect(newFrame, cascadeClassifier, scale)){
-//            cout << "Face detected!" << endl;
-//        }
-// increment counter
+        // increment counter
         count++;
         //convert to grayscale
         cvtColor(frame, gray, COLOR_BGR2GRAY);
@@ -120,10 +122,11 @@ int main(int argc, char** argv) {
         if (rect.width < 50 || rect.height < 50){
             ;;
         } else {
-            rectangle(frame, ptx, pty, Scalar(0,255,0), 1);
-            // take a picture every 3 frames
-            if (count % 3 == 0) {
-                capImage(frame, num, captures, screenShots);
+            // Uncomment to display rectangle on largest moving mass
+//            rectangle(frame, ptx, pty, Scalar(0,255,0), 1);
+            // take a picture every 2 frames
+            if (count % 2 == 0) {
+                capMotion(frame, num, captures);
             }
         }
 
@@ -185,21 +188,24 @@ int main(int argc, char** argv) {
         }
 
     }
+    for (auto& p : filesystem::directory_iterator(pathCaptures))
+    {
+        numFiles++;
+    }
+    cout << "Number of files " << numFiles << endl;
     // integer below needs to be dynamic
-    cout << "size: " << 38 << endl;
-    int sz = 0;
+    int facesSpotted = 0;
     Mat image;
-    for (int i = 0; i < 38; i++) {
+    for (int i = 0; i < numFiles; i++) {
         image = imread(captures + "/image_capture_" + to_string(i) + ".jpg");
 
-        if (Detection::detect(image, cascadeClassifier, scale)) {
-//        if (Detection::detect(newFrame, cascadeClassifier, scale)){
-            sz++;
-            cout << i << endl;
-            capImage2(image, i, detected_faces);
+        if (Detection::detect(image, cascadeClassifier, 1, totSize, totSizeX, totSizeY)) {
+            facesSpotted++;
+            capFace(image, i, detected_faces, totSize, totSizeX, totSizeY);
+            cout << "Spotted @ " << i << endl;
         }
     }
-    cout << "Found " << sz << " faces." << endl;
+    cout << "Found " << facesSpotted << " faces." << endl;
     cap.release();
     destroyAllWindows();
     return 0;
@@ -213,19 +219,18 @@ void zoom(Mat& frame, Mat& frame2, const string& name){
     imshow(name, frame2);
 }
 // screenshot function
-void capImage(Mat& imgCap, int& num, const string& location, vector<Mat>& ss){
+void capMotion(Mat& imgCap, int& num, const string& location){
     Mat img;
     img = imgCap;
-    // pushing captures to vector
-    ss.push_back(img);
     imwrite(location + "/image_capture_" + to_string(num) + ".jpg", img);
     // need to set up proper directory for images, as of now each run inits num to 0.
     num++;
 }
-void capImage2(Mat& imgCap, int num, const string& location){
+// iterate through all motion caps and check if any faces are present; get a close up mugshot
+void capFace(Mat& imgCap, int num, const string& location, int& totSize, int& totSizeX, int& totSizeY){
     Mat img;
-    img = imgCap;
-    // pushing captures to vector
+    Rect closeUp(totSizeX, totSizeY, totSize, totSize);
+    img = imgCap(closeUp);
     imwrite(location + "/image_capture_" + to_string(num) + ".jpg", img);
 }
 
