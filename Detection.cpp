@@ -30,8 +30,11 @@ bool Detection::detect(cv::Mat& image, cv::CascadeClassifier& cascClassifier, do
         cv::Rect s;
         s = detectedFace.at(0);
         totSize = s.width;
+        totSize += 60;
         x = s.x;
+        x -= 35;
         y = s.y;
+        y -= 20;
         // face detected
         b = true;
     }
